@@ -1,0 +1,31 @@
+[package]
+name = "f50-pro-monitor"
+version = "1.0.1"
+description = "ZTE F50 Pro (MU3356) native monitor for Windows x86_64"
+authors = ["F50_Pro_Monitor"]
+edition = "2021"
+
+[lib]
+name = "f50_pro_monitor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+base64 = "0.22"
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[features]
+# 生产构建（cargo build --release / tauri build）必须启用。
+# 未启用时 tauri-build 的 is_dev() 返回 true，generate_context!() 会忽略 frontendDist、
+# 改为加载 build.devUrl(http://127.0.0.1:1420)，窗口将显示 ERR_CONNECTION_REFUSED。
+# 开发时（tauri dev）不要带此 feature，才能使用 Vite 开发服务器的 HMR。
+custom-protocol = ["tauri/custom-protocol"]

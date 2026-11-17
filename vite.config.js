@@ -1,0 +1,23 @@
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { devApiPlugin } from './server/vitePlugin.js'
+
+export default defineConfig({
+  plugins: [vue(), devApiPlugin()],
+  clearScreen: false,
+  server: {
+    host: '127.0.0.1',
+    port: 1420,
+    strictPort: true
+  },
+  preview: {
+    host: '127.0.0.1',
+    port: 1420,
+    strictPort: true
+  },
+  build: {
+    outDir: 'dist',
+    target: 'chrome110',
+    emptyOutDir: true
+  }
+})

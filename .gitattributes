@@ -1,0 +1,10 @@
+# 必须在首次 git add 之前存在：阻止 core.autocrlf 把 .bat 规范成 LF
+# （裸 LF 会让 cmd.exe 的 goto / label 解析失效，双击闪退）
+*.bat -text
+
+# 二进制资源
+*.png binary
+*.ico binary
+*.rgba binary
+*.exe binary
+*.dll binary

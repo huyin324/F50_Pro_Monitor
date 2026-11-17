@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"主窗口权限：核心能力 + 原生目录选择对话框（支持 SMB/UNC 与中文路径）","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-open"]}}

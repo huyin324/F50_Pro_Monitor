@@ -1,0 +1,251 @@
+# -*- coding: utf-8 -*-
+"""生成 Windows 一键启动 .bat：CRLF + GBK + 无 BOM（规避 cmd.exe 解析陷阱）"""
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+LAUNCH = [
+    "@echo off",
+    "chcp 936 >nul 2>nul",
+    "title F50 Pro Monitor",
+    'cd /d "%~dp0"',
+    "",
+    "where node >nul 2>nul",
+    "if errorlevel 1 goto NO_NODE",
+    "if not exist \"node_modules\\vite\" goto NEED_INSTALL",
+    "goto READY",
+    "",
+    ":NEED_INSTALL",
+    "echo [1/2] 首次运行，正在安装前端依赖（约 1 分钟）...",
+    "call npm install --no-audit --no-fund",
+    "if errorlevel 1 goto FAIL",
+    "",
+    ":READY",
+    "echo [2/2] 正在启动 F50 Pro Monitor（浏览器预览模式）...",
+    'start "F50ProMonitor Server" /min cmd /c "node node_modules\\vite\\bin\\vite.js --host 127.0.0.1 --port 1420"',
+    "timeout /t 4 >nul",
+    'start "" http://127.0.0.1:1420',
+    "echo.",
+    "echo 已启动。默认设备地址 http://192.168.0.1，可在界面「设置」中修改。",
+    "echo 关闭「F50ProMonitor Server」最小化窗口即可停止服务。",
+    "timeout /t 3 >nul",
+    "goto END",
+    "",
+    ":NO_NODE",
+    "echo [错误] 未检测到 Node.js。请安装 Node.js 18 或更高版本后重试。",
+    "pause",
+    "goto END",
+    "",
+    ":FAIL",
+    "echo [错误] 依赖安装失败，请检查网络或手动执行 npm install。",
+    "pause",
+    "goto END",
+    "",
+    ":END",
+]
+
+NATIVE = [
+    "@echo off",
+    "chcp 936 >nul 2>nul",
+    "title F50 Pro Monitor - 原生窗口版",
+    'cd /d "%~dp0"',
+    "",
+    'if not exist "F50_Pro_Monitor.exe" goto NO_EXE',
+    'if not exist "WebView2Loader.dll" goto NO_DLL',
+    "echo 正在启动 F50 Pro Monitor 原生窗口（需 WebView2 Runtime）...",
+    'start "" "F50_Pro_Monitor.exe"',
+    "goto END",
+    "",
+    ":NO_EXE",
+    "echo [错误] 未找到 F50_Pro_Monitor.exe。",
+    "echo        请运行「构建原生版_本机GNU.bat」，或改用「一键启动.bat」浏览器模式。",
+    "pause",
+    "goto END",
+    "",
+    ":NO_DLL",
+    "echo [错误] 未找到 WebView2Loader.dll。",
+    "echo        GNU 构建版需要该 DLL 与 exe 放在同一目录，请勿单独移动 exe。",
+    "pause",
+    "goto END",
+    "",
+    ":END",
+]
+
+# 本机（中文用户名 + MinGW GNU 工具链）可用的原生构建脚本。
+# rustup 会把 ASCII 联接解析回中文真实路径，导致 ld.exe 找不到 sysroot 里的 .rlib，
+# 因此直接使用复制到纯 ASCII 路径下的原生 cargo.exe，并把 TMP/TARGET 也设为纯 ASCII。
+NATIVE_BUILD = [
+    "@echo off",
+    "chcp 936 >nul 2>nul",
+    "title F50 Pro Monitor - 本机 GNU 工具链构建",
+    'cd /d "%~dp0"',
+    "",
+    'for %%i in ("%~dp0..\\_rusthome\\gnu\\bin") do set "RUST_BIN=%%~fi"',
+    'for %%i in ("%~dp0..\\_rusthome\\cargo") do set "CARGO_HOME=%%~fi"',
+    'for %%i in ("%~dp0..\\_rusthome\\rustup_ascii") do set "RUSTUP_HOME=%%~fi"',
+    'for %%i in ("%~dp0..\\_rusttmp") do set "TMP_ASCII=%%~fi"',
+    'for %%i in ("%~dp0src-tauri\\target-gnu2") do set "CARGO_TARGET_DIR=%%~fi"',
+    'if not exist "%TMP_ASCII%" md "%TMP_ASCII%"',
+    'set "CARGO_INCREMENTAL=0"',
+    'set "CARGO_BUILD_JOBS=1"',
+    'set "TMP=%TMP_ASCII%"',
+    'set "TEMP=%TMP_ASCII%"',
+    'set "TMPDIR=%TMP_ASCII%"',
+    'set "PATH=%RUST_BIN%;C:\\mingw64\\bin;%PATH%"',
+    "",
+    'if not exist "%RUST_BIN%\\cargo.exe" goto NO_TOOLCHAIN',
+    "where node >nul 2>nul",
+    "if errorlevel 1 goto NO_NODE",
+    'if not exist "node_modules\\vite" call npm install --no-audit --no-fund',
+    "",
+    "echo [1/3] 构建前端 dist ...",
+    "call npm run build",
+    "if errorlevel 1 goto FAIL",
+    "",
+    "echo [2/3] 编译 Rust release（首次约 10 分钟）...",
+    'pushd "%~dp0src-tauri"',
+    '"%RUST_BIN%\\cargo.exe" build --release -j 1 --features custom-protocol',
+    "if errorlevel 1 goto FAIL_POP",
+    "popd",
+    "",
+    "echo [3/3] 复制可执行程序到项目根目录 ...",
+    'copy /Y "%CARGO_TARGET_DIR%\\release\\f50-pro-monitor.exe" "%~dp0F50_Pro_Monitor.exe" >nul',
+    "if errorlevel 1 goto FAIL",
+    'copy /Y "%CARGO_TARGET_DIR%\\release\\WebView2Loader.dll" "%~dp0WebView2Loader.dll" >nul',
+    "if errorlevel 1 goto FAIL",
+    "echo.",
+    "echo 构建完成：F50_Pro_Monitor.exe + WebView2Loader.dll（两者需保持同一目录）",
+    "pause",
+    "goto END",
+    "",
+    ":FAIL_POP",
+    "popd",
+    "goto FAIL",
+    "",
+    ":NO_TOOLCHAIN",
+    "echo [错误] 未找到纯 ASCII 工具链：%RUST_BIN%",
+    "echo        请阅读 README「原生 exe 构建环境」章节准备工具链，",
+    "echo        或安装 VS 2022 C++ 生成工具后使用「构建可执行程序.bat」。",
+    "pause",
+    "goto END",
+    "",
+    ":NO_NODE",
+    "echo [错误] 未检测到 Node.js，无法构建前端。",
+    "pause",
+    "goto END",
+    "",
+    ":FAIL",
+    "echo [错误] 构建失败，请查看上方日志。",
+    "pause",
+    "goto END",
+    "",
+    ":END",
+]
+
+TAURI_DEV = [
+    "@echo off",
+    "chcp 936 >nul 2>nul",
+    "title F50 Pro Monitor - Tauri 开发版",
+    'cd /d "%~dp0"',
+    "",
+    "where cargo >nul 2>nul",
+    "if errorlevel 1 goto NO_RUST",
+    "if not exist \"node_modules\\vite\" goto NEED_INSTALL",
+    "goto READY",
+    "",
+    ":NEED_INSTALL",
+    "call npm install --no-audit --no-fund",
+    "if errorlevel 1 goto FAIL",
+    "",
+    ":READY",
+    "echo 正在启动 Tauri 原生窗口（需要 Rust + MSVC 构建工具 + WebView2）...",
+    "call npm run tauri:dev",
+    "goto END",
+    "",
+    ":NO_RUST",
+    "echo [错误] 未检测到 cargo。请先安装 Rust 与 VS 2022 生成工具，或改用「一键启动.bat」。",
+    "pause",
+    "goto END",
+    "",
+    ":FAIL",
+    "echo [错误] 依赖安装失败。",
+    "pause",
+    "goto END",
+    "",
+    ":END",
+]
+
+BUILD = [
+    "@echo off",
+    "chcp 936 >nul 2>nul",
+    "title F50 Pro Monitor - 构建可执行程序",
+    'cd /d "%~dp0"',
+    "",
+    "where cargo >nul 2>nul",
+    "if errorlevel 1 goto NO_RUST",
+    "if not exist \"node_modules\\vite\" goto NEED_INSTALL",
+    "goto READY",
+    "",
+    ":NEED_INSTALL",
+    "call npm install --no-audit --no-fund",
+    "if errorlevel 1 goto FAIL",
+    "",
+    ":READY",
+    "echo 正在构建单文件可执行程序（首次构建需下载 Rust 依赖，约 10-20 分钟）...",
+    "call npm run tauri:build",
+    "if errorlevel 1 goto FAIL",
+    "echo.",
+    "echo 构建完成：src-tauri\\target\\release\\f50-pro-monitor.exe",
+    "echo 安装包：src-tauri\\target\\release\\bundle\\nsis 或 msi",
+    "pause",
+    "goto END",
+    "",
+    ":NO_RUST",
+    "echo [错误] 未检测到 Rust。请先安装 rustup（stable-x86_64-pc-windows-msvc）",
+    "echo        以及 Visual Studio 2022「使用 C++ 的桌面开发」工作负载。",
+    "pause",
+    "goto END",
+    "",
+    ":FAIL",
+    "echo [错误] 构建失败，请查看上方日志。",
+    "pause",
+    "goto END",
+    "",
+    ":END",
+]
+
+FILES = {
+    "一键启动.bat": LAUNCH,
+    "start.bat": LAUNCH,
+    "运行原生版.bat": NATIVE,
+    "native.bat": NATIVE,
+    "启动Tauri开发版.bat": TAURI_DEV,
+    "tauri_dev.bat": TAURI_DEV,
+    "构建可执行程序.bat": BUILD,
+    "build_exe.bat": BUILD,
+    "构建原生版_本机GNU.bat": NATIVE_BUILD,
+    "build_native_gnu.bat": NATIVE_BUILD,
+}
+
+
+def main():
+    for name, lines in FILES.items():
+        content = "\r\n".join(lines) + "\r\n"
+        p = ROOT / name
+        p.write_bytes(content.encode("gbk"))
+        raw = p.read_bytes()
+        assert raw.count(b"\n") - raw.count(b"\r\n") == 0, f"{name}: 存在裸 LF"
+        assert raw[:3] != b"\xef\xbb\xbf", f"{name}: 存在 BOM"
+        raw.decode("gbk")
+        print(f"{name}: OK (CRLF={raw.count(chr(13).encode() + chr(10).encode())})")
+
+    # 校验脚本引用的关键文件确实存在
+    assert (ROOT / "package.json").exists()
+    assert (ROOT / "node_modules" / "vite" / "bin" / "vite.js").exists()
+    assert (ROOT / "server" / "api.js").exists()
+    assert (ROOT / "protocol.json").exists()
+    print("引用目标校验通过")
+
+
+if __name__ == "__main__":
+    main()
